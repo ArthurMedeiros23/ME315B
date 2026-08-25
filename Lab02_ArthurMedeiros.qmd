@@ -1,0 +1,128 @@
+---
+title: "Laboratório 2: Processamento de Bases de Dados em Lote"
+author: "Arthur de Souza Medeiros"
+format:
+  pdf:
+    documentclass: article
+editor: visual
+---
+
+## Questão 1: Estatísticas suficientes
+
+As estatísticas suficientes são:
+
+-   `n_atraso`: número de voos com atraso maior que 10 minutos;
+-   `n_total`: número total de voos do grupo (dia, mês, cia. aérea).
+
+Com esses dois valores dá pra calcular Perc = n_atraso / n_total, e como soma
+de somas é igual à soma total, eles podem ser acumulados chunk por chunk sem
+precisar guardar os voos individuais.
+
+```{r}
+#| message: false
+library(readr)
+library(dplyr)
+library(ggcal)
+library(ggplot2)
+```
+
+## Questão 2: Função `getStats`
+
+```{r}
+getStats <- function(input, pos) {
+
+  resultado <- input %>%
+    filter(AIRLINE %in% c("AA", "DL", "UA", "US")) %>%
+    filter(!is.na(ARRIVAL_DELAY)) %>%
+    group_by(DAY, MONTH, AIRLINE) %>%
+    summarise(
+      n_atraso = sum(ARRIVAL_DELAY > 10),
+      n_total  = n(),
+      .groups = "drop"
+    )
+
+  return(resultado)
+}
+```
+
+## Questão 3: Leitura em lotes com `read_csv_chunked`
+
+```{r}
+resultados_parciais <- read_csv_chunked(
+  file = "flights.csv.zip",
+  callback = DataFrameCallback$new(getStats),
+  chunk_size = 100000,
+  col_types = cols_only(
+    MONTH         = col_integer(),
+    DAY           = col_integer(),
+    AIRLINE       = col_character(),
+    ARRIVAL_DELAY = col_integer()
+  )
+)
+```
+
+## Questão 4: Função `computeStats`
+
+```{r}
+computeStats <- function(dados) {
+
+  final <- dados %>%
+    group_by(AIRLINE, MONTH, DAY) %>%
+    summarise(
+      n_atraso = sum(n_atraso),
+      n_total  = sum(n_total),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      Data = as.Date(paste(2015, MONTH, DAY, sep = "-")),
+      Perc = n_atraso / n_total,
+      Cia  = AIRLINE
+    ) %>%
+    select(Cia, Data, Perc)
+
+  return(final)
+}
+
+resultado_final <- computeStats(resultados_parciais)
+resultado_final
+```
+
+## Questão 5: Mapas de calor em formato de calendário
+
+```{r}
+pal <- scale_fill_gradient(low = "#4575b4", high = "#d73027")
+
+baseCalendario <- function(stats, cia) {
+  sub <- stats %>% filter(Cia == cia)
+  calendario <- ggcal(sub$Data, sub$Perc)
+  return(calendario)
+}
+
+cAA <- baseCalendario(resultado_final, "AA")
+cDL <- baseCalendario(resultado_final, "DL")
+cUA <- baseCalendario(resultado_final, "UA")
+cUS <- baseCalendario(resultado_final, "US")
+```
+
+```{r}
+cAA + pal + ggtitle("American Airlines")
+```
+
+```{r}
+cDL + pal + ggtitle("Delta Airlines")
+```
+
+```{r}
+cUA + pal + ggtitle("United Airlines")
+```
+
+```{r}
+cUS + pal + ggtitle("US Airways")
+```
+
+## Horário de compilação
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
