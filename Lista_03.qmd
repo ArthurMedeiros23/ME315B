@@ -1,0 +1,223 @@
+---
+title: "Lista 03 — DISTINCT, AND-OR-NOT"
+subtitle: "SQL com SQLite (tabelas PRESERVE e EMPLOYEE)"
+author: "Arthur Medeiros"
+date: "2028-07-08"
+format: pdf
+editor: visual
+---
+
+RA: 238473
+
+## Conexão com o banco de dados
+
+```{r}
+library(DBI)
+library(RSQLite)
+
+con <- dbConnect(RSQLite::SQLite(), "C:/Users/Arthur/Desktop/ME315/Lista_03/me315.sqlite")
+```
+
+## Hands-On — Lista 3
+
+### 1. STATE e FEE da tabela PRESERVE, sem duplicados
+
+```{r}
+dbGetQuery(con, "
+  SELECT DISTINCT STATE, FEE
+  FROM PRESERVE
+")
+```
+
+### 2. Valores de DNO na tabela EMPLOYEE, sem duplicados
+
+```{r}
+dbGetQuery(con, "
+  SELECT DISTINCT DNO
+  FROM EMPLOYEE
+")
+```
+
+### 3. Comparação entre DNO/SALARY com e sem DISTINCT e com ORDER BY
+
+```{r}
+dbGetQuery(con, "SELECT DNO, SALARY FROM EMPLOYEE")
+```
+
+```{r}
+dbGetQuery(con, "SELECT DISTINCT DNO, SALARY FROM EMPLOYEE")
+```
+
+```{r}
+dbGetQuery(con, "SELECT DISTINCT DNO, SALARY FROM EMPLOYEE ORDER BY DNO, SALARY")
+```
+
+Observação: a primeira consulta mostra as 6 linhas da tabela do jeito que estão, sem tirar
+repetição. A segunda usa DISTINCT, então se tiver duas linhas com o mesmo par de DNO
+e SALARY, só uma delas aparece. A terceira é igual a segunda, só que ordenada por DNO e
+depois por SALARY.
+
+### 4. Reservas em Montana com menos de 1.000 acres
+
+```{r}
+dbGetQuery(con, "
+  SELECT *
+  FROM PRESERVE
+  WHERE STATE = 'MT' AND ACRES < 1000
+")
+```
+
+### 5. Reservas com ACRES entre 1200 e 15000 (inclusive)
+
+```{r}
+dbGetQuery(con, "
+  SELECT *
+  FROM PRESERVE
+  WHERE ACRES BETWEEN 1200 AND 15000
+")
+```
+
+### 6. Reservas em Montana, sem taxa de entrada, maiores que 10.000 acres
+
+```{r}
+dbGetQuery(con, "
+  SELECT *
+  FROM PRESERVE
+  WHERE STATE = 'MT' AND FEE = 0 AND ACRES > 10000
+")
+```
+
+### 7. Reservas em Montana ou Massachusetts
+
+```{r}
+dbGetQuery(con, "
+  SELECT *
+  FROM PRESERVE
+  WHERE STATE = 'MT' OR STATE = 'MA'
+")
+```
+
+### 8. Reservas em Montana ou com menos de 1.000 acres
+
+```{r}
+dbGetQuery(con, "
+  SELECT *
+  FROM PRESERVE
+  WHERE STATE = 'MT' OR ACRES < 1000
+")
+```
+
+### 9. Número e nome de reservas com taxa de entrada diferente de zero
+
+```{r}
+dbGetQuery(con, "
+  SELECT PNO, PNAME
+  FROM PRESERVE
+  WHERE FEE <> 0
+")
+```
+
+### 10. Número e nome de reservas sem taxa de US$ 3,00 e sem taxa de US$ 10,00
+
+```{r}
+dbGetQuery(con, "
+  SELECT PNO, PNAME
+  FROM PRESERVE
+  WHERE FEE <> 3 AND FEE <> 10
+")
+```
+
+### 11. Reservas no Arizona sem taxa, ou qualquer reserva com menos de 100 acres
+
+```{r}
+dbGetQuery(con, "
+  SELECT *
+  FROM PRESERVE
+  WHERE (STATE = 'AZ' AND FEE = 0) OR ACRES < 100
+")
+```
+
+### 12. Reservas com menos de 1.000 acres e taxa zero, ou localizadas no Arizona
+
+```{r}
+dbGetQuery(con, "
+  SELECT *
+  FROM PRESERVE
+  WHERE (ACRES < 1000 AND FEE = 0) OR STATE = 'AZ'
+")
+```
+
+### 13. Reservas sem taxa de entrada (FEE não maior que zero), ou em Montana com mais de 1.000 acres
+
+```{r}
+dbGetQuery(con, "
+  SELECT *
+  FROM PRESERVE
+  WHERE NOT FEE > 0 OR (STATE = 'MT' AND ACRES > 1000)
+")
+```
+
+### 14. Todas as reservas, exceto as de Montana sem taxa de entrada
+
+```{r}
+dbGetQuery(con, "
+  SELECT *
+  FROM PRESERVE
+  WHERE NOT (STATE = 'MT' AND FEE = 0)
+")
+```
+
+## Equivalências lógicas (AND / OR / NOT)
+
+### 15.
+
+```
+WHERE STATE = 'MA' AND (ACRES > 1000 OR FEE = 0.0)
+WHERE (STATE = 'MA' AND ACRES > 1000) OR (STATE = 'MA' AND FEE = 0.0)
+```
+
+São equivalentes. É a propriedade distributiva: C1 AND (C2 OR C3) = (C1 AND C2) OR
+(C1 AND C3).
+
+### 16.
+
+```
+WHERE STATE = 'MA' OR (ACRES > 1000 AND FEE = 0.0)
+WHERE (STATE = 'MA' OR ACRES > 1000) AND (STATE = 'MA' OR FEE = 0.0)
+```
+
+São equivalentes. É a propriedade distributiva: C1 OR (C2 AND C3) = (C1 OR C2) AND
+(C1 OR C3).
+
+### 17.
+
+```
+WHERE NOT (ACRES < 50 AND STATE = 'MA')
+WHERE NOT ACRES < 50 AND NOT STATE = 'MA'
+WHERE ACRES >= 50 OR STATE <> 'MA'
+```
+
+Pela Lei de De Morgan, NOT (C1 AND C2) = (NOT C1) OR (NOT C2). Então a 1ª e a 3ª
+cláusula são equivalentes entre si, porque as duas usam OR. Já a 2ª cláusula não é equivalente
+às outras, porque ela usa AND no lugar de OR.
+
+### 18.
+
+```
+WHERE NOT (ACRES < 50 OR STATE = 'MA')
+WHERE NOT ACRES < 50 OR NOT STATE = 'MA'
+WHERE NOT ACRES < 50 AND NOT STATE = 'MA'
+```
+
+Pela Lei de De Morgan, NOT (C1 OR C2) = (NOT C1) AND (NOT C2). Então a 1ª e
+a 3ª cláusula são equivalentes entre si, porque as duas usam AND. Já a 2ª cláusula não é
+equivalente às outras, porque ela usa OR no lugar de AND.
+
+```{r}
+dbDisconnect(con)
+```
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
