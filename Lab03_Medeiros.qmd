@@ -1,0 +1,156 @@
+---
+title: "Laboratório 3: Dados relacionais e operações do tipo join"
+author: "Arthur Medeiros"
+format: pdf
+editor: visual
+---
+
+```{r}
+#| message: false
+#| warning: false
+library(readr)
+library(dplyr)
+library(leaflet)
+```
+
+## 1. Importação dos dados
+
+### 1.1 Aeroportos
+
+Importando só as colunas pedidas: `IATA_CODE`, `CITY`, `STATE`, `LATITUDE`, `LONGITUDE`.
+
+```{r}
+#| message: false
+airports <- read_csv(
+  "airports.csv",
+  col_select = c(IATA_CODE, CITY, STATE, LATITUDE, LONGITUDE)
+)
+
+airports
+```
+
+### 1.2 Companhias aéreas
+
+```{r}
+#| message: false
+airlines <- read_csv("airlines.csv")
+
+airlines
+```
+
+### 1.3 Vôos (leitura em partes / *chunks*)
+
+Lendo `flights.csv` em partes de 1 milhão de linhas, aplicando os filtros e calculando as estatísticas suficientes em cada parte.
+
+```{r}
+#| message: false
+
+#| message: false
+
+juntar_chunk <- function(data, index, acc) {
+
+  data |>
+    filter(!startsWith(DESTINATION_AIRPORT, "1")) |>
+    tidyr::drop_na() |>
+    group_by(DESTINATION_AIRPORT) |>
+    summarise(
+      soma_atraso = sum(ARRIVAL_DELAY),
+      n_voos      = n(),
+      .groups     = "drop"
+    )
+}
+
+estatisticas <- read_csv_chunked(
+  file       = "flights.csv",
+  callback   = AccumulateCallback$new(juntar_chunk),
+  chunk_size = 1e6,
+  col_types  = cols_only(
+    DESTINATION_AIRPORT = col_character(),
+    ARRIVAL_DELAY       = col_double()
+  )
+)
+
+# junta as partes e calcula o atraso medio final
+flights <- estatisticas |>
+  group_by(DESTINATION_AIRPORT) |>
+  summarise(
+    soma_atraso = sum(soma_atraso),
+    n_voos      = sum(n_voos),
+    .groups     = "drop"
+  ) |>
+  mutate(ARRIVAL_DELAY_MEDIO = soma_atraso / n_voos) |>
+  select(DESTINATION_AIRPORT, ARRIVAL_DELAY_MEDIO, n_voos)
+
+flights
+```
+
+## 2. Operação *join*
+
+### 2.1 Chave em `flights`
+
+A chave é `DESTINATION_AIRPORT`.
+
+### 2.2 Chave em `airports`
+
+A chave é `IATA_CODE`.
+
+### 2.3 Aeroportos em `flights` ausentes em `airports`
+
+```{r}
+aeroportos_ausentes <- anti_join(
+  flights, airports,
+  by = c("DESTINATION_AIRPORT" = "IATA_CODE")
+)
+
+aeroportos_ausentes
+```
+
+### 2.4 Comando de combinação (join)
+
+Quero manter todos os aeroportos de `flights` e só adicionar as colunas de `airports`. Por isso uso `left_join`, com `DESTINATION_AIRPORT` e `IATA_CODE` como chaves.
+
+```{r}
+flights <- left_join(
+  flights, airports,
+  by = c("DESTINATION_AIRPORT" = "IATA_CODE")
+)
+```
+
+### 2.5 Tabela resultante
+
+```{r}
+flights
+```
+
+## 3. Aeroportos por estado
+
+```{r}
+aeroportos_por_estado <- airports |>
+  group_by(STATE) |>
+  summarise(n_aeroportos = n(), .groups = "drop") |>
+  arrange(desc(n_aeroportos))
+
+aeroportos_por_estado
+```
+
+## 4. Mapa dos atrasos observados por aeroporto
+
+```{r}
+this <- leaflet(data = flights) |>
+  addTiles() |>
+  addMarkers(
+    lng   = ~LONGITUDE,
+    lat   = ~LATITUDE,
+    popup = ~paste0(
+      DESTINATION_AIRPORT, " (", CITY, ", ", STATE, ")<br>",
+      "Atraso médio: ", round(ARRIVAL_DELAY_MEDIO, 2), " min"
+    )
+  )
+
+this
+```
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
