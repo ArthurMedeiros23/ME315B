@@ -1,0 +1,129 @@
+---
+title: "Lab 7"
+author: "Arthur Medeiros RA:238473"
+format: pdf
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RSQLite)
+```
+
+## Atividade 1 — Conexão com o banco
+
+```{r}
+conn <- dbConnect(SQLite(), "database.sqlite3")
+dbListTables(conn)
+```
+
+## Atividade 2 — Professores de Estatística
+
+```{r}
+sql_profs <- "
+SELECT DISTINCT i.id, i.name
+FROM subjects s
+JOIN subject_memberships sm ON sm.subject_code = s.code
+JOIN course_offerings co    ON co.uuid = sm.course_offering_uuid
+JOIN sections se            ON se.course_offering_uuid = co.uuid
+JOIN teachings t            ON t.section_uuid = se.uuid
+JOIN instructors i          ON i.id = t.instructor_id
+WHERE s.abbreviation = 'STAT'
+ORDER BY i.name
+"
+
+profs_stat <- dbGetQuery(conn, sql_profs)
+head(profs_stat, 10)
+nrow(profs_stat)  # quantidade de professores
+```
+
+## Atividade 3 — Disciplina/professor mais fácil e mais difícil
+
+```{r}
+sql_notas <- "
+SELECT gd.course_offering_uuid, gd.section_number,
+       gd.a_count, gd.ab_count, gd.b_count, gd.bc_count,
+       gd.c_count, gd.d_count, gd.f_count,
+       se.uuid AS section_uuid, co.course_uuid
+FROM grade_distributions gd
+JOIN course_offerings co     ON co.uuid = gd.course_offering_uuid
+JOIN subject_memberships sm  ON sm.course_offering_uuid = co.uuid
+JOIN subjects s               ON s.code = sm.subject_code
+JOIN sections se               ON se.course_offering_uuid = co.uuid
+                               AND se.number = gd.section_number
+WHERE s.abbreviation = 'STAT'
+"
+
+notas_stat <- dbGetQuery(conn, sql_notas)
+head(notas_stat)
+```
+
+
+```{r}
+count_cols <- c("a_count", "ab_count", "b_count", "bc_count", "c_count", "d_count", "f_count")
+notas_stat[count_cols] <- lapply(notas_stat[count_cols], as.numeric)
+
+notas_stat$pontos <- notas_stat$a_count * 4 + notas_stat$ab_count * 3.5 +
+  notas_stat$b_count * 3 + notas_stat$bc_count * 2.5 +
+  notas_stat$c_count * 2 + notas_stat$d_count * 1
+
+notas_stat$n_alunos <- notas_stat$a_count + notas_stat$ab_count + notas_stat$b_count +
+  notas_stat$bc_count + notas_stat$c_count + notas_stat$d_count + notas_stat$f_count
+
+notas_stat <- notas_stat[notas_stat$n_alunos > 0, ]
+```
+
+### Professor mais difícil / mais fácil
+
+```{r}
+teachings   <- dbGetQuery(conn, "SELECT instructor_id, section_uuid FROM teachings")
+instructors <- dbGetQuery(conn, "SELECT id, name FROM instructors")
+
+notas_prof <- merge(notas_stat, teachings, by = "section_uuid")
+notas_prof <- merge(notas_prof, instructors, by.x = "instructor_id", by.y = "id")
+
+resumo_prof <- aggregate(cbind(pontos, n_alunos) ~ instructor_id + name, data = notas_prof, sum)
+
+# tiro professores com poucos alunos avaliados, pra não deixar uma turma
+# de 10 pessoas que tirou só A decidir quem é "o mais fácil"
+resumo_prof <- resumo_prof[resumo_prof$n_alunos >= 20, ]
+resumo_prof$gpa_medio <- resumo_prof$pontos / resumo_prof$n_alunos
+resumo_prof <- resumo_prof[order(resumo_prof$gpa_medio), ]
+
+cat("Professor mais difícil:\n")
+head(resumo_prof, 1)
+
+cat("Professor mais fácil:\n")
+tail(resumo_prof, 1)
+```
+
+### Disciplina mais difícil / mais fácil
+
+Mesma lógica, agrupando por disciplina em vez de professor.
+
+```{r}
+courses <- dbGetQuery(conn, "SELECT uuid, name, number FROM courses")
+
+resumo_curso <- aggregate(cbind(pontos, n_alunos) ~ course_uuid, data = notas_stat, sum)
+resumo_curso <- merge(resumo_curso, courses, by.x = "course_uuid", by.y = "uuid")
+
+resumo_curso <- resumo_curso[resumo_curso$n_alunos >= 20, ]
+resumo_curso$gpa_medio <- resumo_curso$pontos / resumo_curso$n_alunos
+resumo_curso <- resumo_curso[order(resumo_curso$gpa_medio), ]
+
+cat("Disciplina mais difícil:\n")
+head(resumo_curso, 1)
+
+cat("Disciplina mais fácil:\n")
+tail(resumo_curso, 1)
+```
+
+## Atividade 4 — Desconectando
+
+```{r}
+dbDisconnect(conn)
+```
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
