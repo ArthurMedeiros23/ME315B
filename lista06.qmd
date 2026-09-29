@@ -1,0 +1,136 @@
+---
+title: "GROUP BY"
+subtitle: "Aula 06"
+format: pdf
+---
+
+## Configuração
+
+```{r setup, message=FALSE}
+library(DBI)
+library(RSQLite)
+con <- dbConnect(RSQLite::SQLite(), "datasets/me315.sqlite")
+```
+
+## Questão 1
+
+```{sql, connection=con}
+SELECT STATE, MIN(ACRES) AS MINACRES
+FROM PRESERVE
+GROUP BY STATE;
+```
+
+## Questão 2
+
+```{sql, connection=con}
+SELECT STATE, MAX(ACRES) AS MAXACRES
+FROM PRESERVE
+WHERE ACRES <= 10000
+GROUP BY STATE;
+```
+
+## Questão 3
+
+```{sql, connection=con}
+SELECT STATE, MAX(ACRES) AS MAXACRES
+FROM PRESERVE
+WHERE ACRES <= 10000
+GROUP BY STATE
+ORDER BY MAXACRES DESC;
+```
+
+## Questão 4
+
+```{sql, connection=con}
+SELECT STATE, MAX(ACRES) AS MAXACRES
+FROM PRESERVE
+GROUP BY STATE
+HAVING MAXACRES < 25000;
+```
+
+## Questão 5
+
+```{sql, connection=con}
+SELECT STATE, MIN(ACRES) AS MINACRES
+FROM PRESERVE
+GROUP BY STATE
+HAVING MINACRES < 100;
+```
+
+## Questão 6
+
+```{sql, connection=con}
+SELECT STATE, PNAME, MAX(ACRES) AS MAXACRES
+FROM PRESERVE
+WHERE ACRES > 1000
+GROUP BY STATE
+HAVING MAXACRES < 25000;
+```
+
+## Questão 7
+
+```{sql, connection=con}
+SELECT STATE, SUM(ACRES) AS TOTAL
+FROM PRESERVE
+GROUP BY STATE
+HAVING TOTAL BETWEEN 10000 AND 50000;
+```
+
+## Questão 8
+
+```{sql, connection=con}
+SELECT STATE, AVG(ACRES) AS MEDIA
+FROM PRESERVE
+GROUP BY STATE
+ORDER BY MEDIA DESC
+LIMIT 1;
+```
+
+## Questão 9
+
+```{sql, connection=con}
+SELECT DNO, AVG(SALARY) AS MEDIA
+FROM EMPLOYEE
+GROUP BY DNO;
+```
+
+## Questão 10
+
+```{sql, connection=con}
+SELECT DNO, SUM(SALARY) AS SOMA, MAX(SALARY) AS MAXIMO, MIN(SALARY) AS MINIMO
+FROM EMPLOYEE
+GROUP BY DNO;
+```
+
+## Questão 11
+
+```{sql, connection=con}
+SELECT DNO, COUNT(*) AS NUM
+FROM EMPLOYEE
+WHERE DNO <> 40
+GROUP BY DNO;
+```
+
+## Questão 12
+
+```{sql, connection=con}
+SELECT DNO, COUNT(*) AS NUM
+FROM EMPLOYEE
+GROUP BY DNO
+HAVING NUM > 2;
+```
+
+## Questão 13
+
+```{sql, connection=con}
+SELECT STATE, SUM(ACRES) AS "SUM(ACRES)"
+FROM PRESERVE
+GROUP BY STATE
+UNION ALL
+SELECT 'Total', SUM(ACRES)
+FROM PRESERVE;
+```
+
+```{r}
+dbDisconnect(con)
+```
