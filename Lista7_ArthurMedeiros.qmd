@@ -1,0 +1,83 @@
+---
+title: "Lista 7"
+author: "Arthur Medeiros"
+lang: pt
+format:
+  pdf: default
+---
+
+```{r}
+#| message: false
+library(DBI)
+library(RSQLite)
+knitr::opts_chunk$set(max.print = Inf)
+con <- dbConnect(RSQLite::SQLite(), "purchase.sqlite")
+```
+
+```{sql}
+#| connection: con
+SELECT PNO, SUM(COST) AS CUSTO_TOTAL
+FROM PURCHASE
+GROUP BY PNO
+ORDER BY PNO
+```
+
+```{sql}
+#| connection: con
+SELECT ENO, SUM(COST) AS CUSTO_TOTAL
+FROM PURCHASE
+GROUP BY ENO
+ORDER BY ENO
+```
+
+```{sql}
+#| connection: con
+SELECT PJNO, ENO, SUM(COST) AS CUSTO_TOTAL
+FROM PURCHASE
+GROUP BY PJNO, ENO
+ORDER BY PJNO, ENO
+```
+
+```{sql}
+#| connection: con
+SELECT PNO, SNO, SUM(COST) AS CUSTO_TOTAL
+FROM PURCHASE
+GROUP BY PNO, SNO
+ORDER BY PNO, SNO
+```
+
+```{sql}
+#| connection: con
+SELECT PJNO, ENO, SNO, SUM(COST) AS CUSTO_TOTAL
+FROM PURCHASE
+GROUP BY PJNO, ENO, SNO
+ORDER BY PJNO, ENO, SNO
+```
+
+```{sql}
+#| connection: con
+SELECT PNO, SNO, ENO, SUM(COST) AS CUSTO_TOTAL
+FROM PURCHASE
+GROUP BY PNO, SNO, ENO
+ORDER BY PNO, SNO, ENO
+```
+
+```{sql}
+#| connection: con
+SELECT PJNO, ENO, SNO, SUM(COST) AS CUSTO_TOTAL
+FROM PURCHASE
+WHERE PJNO <> 'PJ2'
+GROUP BY PJNO, ENO, SNO
+```
+
+```{sql}
+#| connection: con
+SELECT PNO, SNO, ENO, SUM(COST) AS CUSTO_TOTAL
+FROM PURCHASE
+GROUP BY PNO, SNO, ENO
+HAVING SUM(COST) >= 2000
+```
+
+```{r}
+dbDisconnect(con)
+```
