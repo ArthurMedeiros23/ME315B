@@ -1,0 +1,92 @@
+---
+title: "Lab 8: Dados Relacionais com Polars"
+author: "Arthur Medeiros"
+format: typst
+---
+
+## Leitura dos dados
+
+Os arquivos são `.tsv.gz` (colunas separadas por tab) e `\N` indica valor faltante.
+
+```{r}
+#| message: false
+library(polars)
+
+basics <- pl$read_csv("title.basics0.tsv.gz",
+                      separator = "\t", null_values = "\\N", quote_char = NULL)
+ratings <- pl$read_csv("title.ratings.tsv.gz",
+                       separator = "\t", null_values = "\\N", quote_char = NULL)
+principals <- pl$read_csv("title.principals0.tsv.gz",
+                          separator = "\t", null_values = "\\N", quote_char = NULL)
+```
+
+## Preparação: juntar filmes com suas notas
+
+Primeiro, fico só com os títulos que são filmes.
+
+```{r}
+so_filmes <- basics$filter(pl$col("titleType") == "movie")
+```
+
+Depois, junto com a tabela de notas pela coluna em comum `tconst`.
+
+```{r}
+filmes <- so_filmes$join(ratings, on = "tconst", how = "inner")
+```
+
+## Questão 1
+
+Ordenei por nota (maior primeiro) e, em caso de empate, por número de votos (maior primeiro).
+
+```{r}
+ordenado <- filmes$sort("averageRating", "numVotes",
+                        descending = c(TRUE, TRUE))
+
+ordenado <- ordenado$select("tconst", "primaryTitle", "averageRating", "numVotes")
+
+q1 <- ordenado$head(5)
+q1
+```
+
+Resposta: todos os cinco filmes têm nota 10.0, então o desempate por votos define a ordem: Kaveri (1023 votos), Kurukku (451), Jedal Dar Omghe 30 Metri (142), Sargashte (134) e Gorgeous Rascal (115).
+
+## Questão 2
+
+```{r}
+notas_altas <- filmes$filter(pl$col("averageRating") > 8)
+
+notas_altas <- notas_altas$drop_nulls("genres")
+
+notas_altas <- notas_altas$with_columns(pl$col("genres")$str$split(","))
+
+generos <- notas_altas$explode("genres")
+
+contagem <- generos$group_by("genres")$agg(pl$len()$alias("n"))
+
+q2 <- contagem$sort("n", descending = TRUE)$head(5)
+q2
+```
+
+Resposta: o gênero mais frequente é Documentary, com 10.564 filmes, seguido de Drama (8.114) e Comedy (3.186).
+
+## Questão 3
+
+```{r}
+bons <- filmes$filter(pl$col("averageRating") > 7.5)$select("tconst")
+
+atores <- principals$filter(
+  (pl$col("category") == "actor") | (pl$col("category") == "actress")
+)
+
+atores_bons <- atores$join(bons, on = "tconst", how = "inner")
+
+contagem3 <- atores_bons$group_by("nconst")$agg(
+  pl$col("tconst")$n_unique()$alias("n_filmes")
+)
+
+q3 <- contagem3$sort("n_filmes", "nconst",
+                     descending = c(TRUE, FALSE))$head(3)
+q3
+```
+
+Resposta: os três atores/atrizes que mais participaram de filmes com nota maior que 7.5 são `nm0004660` (199 filmes), `nm0595934` (155 filmes) e `nm3183374` (124 filmes). Como não há tabela de nomes neste lab, as pessoas são identificadas pelo código `nconst`.
